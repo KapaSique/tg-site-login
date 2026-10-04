@@ -1,0 +1,6 @@
+[
+  {"phone": "+79990000001", "customer_id": "cust-001", "name": "Anna"},
+  {"phone": "+79990000002", "customer_id": "cust-002", "name": "Boris", "review_reasons": ["name_mismatch"]},
+  {"phone": "+79990000003", "customer_id": "cust-003", "name": "Clara"},
+  {"phone": "+79990000003", "customer_id": "cust-004", "name": "Clara (duplicate)"}
+]

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Вход через Telegram: пример</title>
+</head>
+<body>
+  <!-- Serve this page from the same origin as the API: the nonce cookie is HttpOnly,
+       SameSite=Lax and host-only (__Host- prefix), so it is never sent cross-site. -->
+  <button id="login" type="button">Войти через Telegram</button>
+
+  <div id="box" hidden>
+    <p>Код на сайте: <b id="pairing"></b>. Он должен совпасть с кодом в сообщении бота.</p>
+    <p><a id="link" target="_blank" rel="noopener">Открыть Telegram</a></p>
+  </div>
+  <p id="status" role="status"></p>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const MESSAGES = {
+      denied_not_found: "Этот номер не найден среди клиентов.",
+      denied_review_required: "Профиль требует ручной проверки. Напишите в поддержку.",
+      expired: "Ссылка устарела. Нажмите кнопку ещё раз.",
+      busy: "Слишком много попыток, подождите минуту.",
+      down: "Вход временно недоступен.",
+    };
+    let timer = null;
+
+    function show(text) { $("status").textContent = text; }
+    function stop() { clearInterval(timer); timer = null; }
+
+    $("login").addEventListener("click", async () => {
+      stop();
+      show("");
+      const response = await fetch("/auth/telegram/start", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      if (response.status === 429) return show(MESSAGES.busy);
+      if (!response.ok) return show(MESSAGES.down);
+      const { deep_link, pairing_code } = await response.json();
+      $("pairing").textContent = pairing_code;
+      $("link").href = deep_link;
+      $("box").hidden = false;
+      timer = setInterval(poll, 2000);
+    });
+
+    async function poll() {
+      const response = await fetch("/auth/telegram/poll", { credentials: "same-origin" });
+      if (response.status === 429) return; // try again on the next tick
+      if (!response.ok) { stop(); return show(MESSAGES.down); }
+      const { status, reason } = await response.json();
+      if (status === "pending") return;
+      stop();
+      $("box").hidden = true;
+      if (status === "confirmed") return location.reload(); // the session cookie is set
+      show(status === "denied" ? MESSAGES["denied_" + reason] : MESSAGES.expired);
+    }
+  </script>
+</body>
+</html>

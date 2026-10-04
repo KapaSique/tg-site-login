@@ -1,0 +1,52 @@
+# api  - the browser-facing endpoints (start, poll) and POST /internal/notify
+# bot  - the Telegram bot, long polling by default (needs no inbound connection)
+# redis - shared state: login codes, rate limits, notification dedupe
+
+x-app: &app
+  build: .
+  env_file: .env
+  environment:
+    STORE_BACKEND: redis
+    REDIS_URL: redis://redis:6379/0
+  depends_on:
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    ports:
+      # Bind to localhost and put a TLS-terminating reverse proxy in front of it.
+      - "127.0.0.1:8000:8000"
+
+  bot:
+    <<: *app
+    command: ["python", "-m", "tg_site_login.bot"]
+    healthcheck:
+      disable: true
+    # Webhook mode (BOT_MODE=webhook) listens on WEBHOOK_PORT; publish it behind your proxy:
+    # ports:
+    #   - "127.0.0.1:8081:8081"
+
+volumes:
+  redis-data:
